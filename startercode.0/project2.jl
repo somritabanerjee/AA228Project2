@@ -115,15 +115,17 @@ function doValueIteration(T,R,numStates,numActions, discount, delta, maxIter)
     return optimalPolicy;
 end
 
-function doQLearning(numStates,numActions,data,discount,alpha)
+function doQLearning(numStates,numActions,data,discount,alpha,numIter)
     Q=zeros(numStates,numActions);
-    for i in 1:size(data, 1)
-        s=data[i,1];
-        a=data[i,2];
-        r=data[i,3];
-        sp=data[i,4];
-        (maxValue,ind_max)=findmax(Q[sp,:]);
-        Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a])
+    for k=1:numIter
+        for i in 1:size(data, 1)
+            s=data[i,1];
+            a=data[i,2];
+            r=data[i,3];
+            sp=data[i,4];
+            (maxValue,ind_max)=findmax(Q[sp,:]);
+            Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a])
+        end
     end
     return Q;
 end
@@ -142,39 +144,52 @@ function findPolicyForSmall(data)
     numActions=4;
     uniformPolicy=ones(numStates,1);
     # Maximum likelihood model-based reinforcement learning
-    # TR=computeTandR(numStates, numActions, data);
-    # discount=0.9;
-    # delta=0.0;
-    # maxIter=1000;
-    # optimalPolicy=doValueIteration(TR.T,TR.R,numStates,numActions, discount, delta, maxIter);
-    # return optimalPolicy;
-    # Q-learning
-    discount_Q=0.9;
-    alpha=1;
-    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha);
-    optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    TR=computeTandR(numStates, numActions, data);
+    discount=0.9;
+    delta=0.0;
+    maxIter=1000;
+    optimalPolicy=doValueIteration(TR.T,TR.R,numStates,numActions, discount, delta, maxIter);
     return optimalPolicy;
+    # Q-learning - For small, this gives a lower score
+    # discount_Q=0.9;
+    # alpha=1;
+    # numIter=10;
+    # Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha, numIter);
+    # optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    # return optimalPolicy;
 end
 
 function findPolicyForMedium(data)
     numStates=50000;
     numActions=7;
     uniformPolicy=ones(numStates,1);
-    return uniformPolicy;
+    # Q-learning
+    discount_Q=0.9;
+    alpha=1;
+    numIter=1;
+    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter);
+    optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    return optimalPolicy;
 end
 
 function findPolicyForLarge(data)
     numStates=312020;
     numActions=9;
     uniformPolicy=ones(numStates,1);
-    return uniformPolicy;
+    # Q-learning
+    discount_Q=0.9;
+    alpha=1;
+    numIter=1;
+    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter);
+    optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    return optimalPolicy;
 end
 
 
 # Create the files for submission
 inputfilename = ["small.csv", "medium.csv", "large.csv"]
 outputfilename= ["small.policy", "medium.policy", "large.policy"]
-for i=1:1
+for i=3:3
     compute(inputfilename[i], outputfilename[i])
 end
 

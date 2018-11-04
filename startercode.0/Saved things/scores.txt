@@ -1,2 +1,7 @@
 27.3048941127 for smallWithModelBasedRL
 7.649424841209043 for smallWithQLearning
+With Q learning
+Score for medium.policy:
+-2.680425
+Score for large.policy:
+0.6783945575035529
