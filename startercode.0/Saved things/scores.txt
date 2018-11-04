@@ -1,0 +1,2 @@
+27.3048941127 for smallWithModelBasedRL
+7.649424841209043 for smallWithQLearning

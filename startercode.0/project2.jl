@@ -40,11 +40,120 @@ function compute(infile::String, outfile::String)
     write_policy(policy,outfile);
 end
 
+struct TransitionAndRewardFunctions
+    T::Array{Float64}
+    R::Array{Float64}
+end
+
+function computeTandR(numStates, numActions, data)
+    T=zeros(numStates,numActions,numStates);
+    R=zeros(numStates,numActions);
+    rho=zeros(numStates,numActions);
+    N=zeros(numStates, numActions, numStates);
+    for i in 1:size(data, 1)
+        s=data[i,1];
+        a=data[i,2];
+        r=data[i,3];
+        sp=data[i,4];
+        N[s,a,sp] += 1;
+        rho[s,a]+=r;
+    end
+    for s in collect(1:numStates)
+        for a in collect(1:numActions)
+            sumOfNsa=sum(N[s,a,:]);
+            if (sumOfNsa !=0)
+                R[s,a]=rho[s,a]/sum(N[s,a,:]);
+                for sp in collect(1:numStates)
+                    T[s,a,sp]=N[s,a,sp]/sum(N[s,a,:]);
+                end
+            end
+        end
+    end
+    return TransitionAndRewardFunctions(T,R);
+end
+
+function doValueIteration(T,R,numStates,numActions, discount, delta, maxIter)
+    k=0;
+    Uold=zeros(numStates);
+    Unew=zeros(numStates);
+    converged=false;
+    while (!converged)
+        Uold=copy(Unew);
+        for s=1:numStates
+            UtilityFunc=zeros(numActions);
+            for a=1:numActions
+                rollingSum=0;
+                for sp=1:numStates
+                    rollingSum+=T[s,a,sp]*Uold[sp];
+                end
+                UtilityFunc[a]=R[s,a]+ discount*rollingSum;
+            end
+            (maxValue,ind)=findmax(UtilityFunc);
+            Unew[s]=maxValue;
+        end
+        k+=1;
+        if (maximum(abs.(Unew-Uold))<=delta || k>maxIter)
+            converged=true;
+            @show(maximum(abs.(Unew-Uold)))
+            @show(k);
+        end
+    end
+    Ustar=Unew;
+    optimalPolicy=ones(numStates,1);
+    for s=1:numStates
+        UtilityFunc=zeros(numActions);
+        for a=1:numActions
+            rollingSum=0;
+            for sp=1:numStates
+                rollingSum+=T[s,a,sp]*Ustar[sp];
+            end
+            UtilityFunc[a]=R[s,a]+ discount*rollingSum;
+        end
+        (maxValue,ind_max)=findmax(UtilityFunc);
+        optimalPolicy[s]=ind_max;
+    end
+    return optimalPolicy;
+end
+
+function doQLearning(numStates,numActions,data,discount,alpha)
+    Q=zeros(numStates,numActions);
+    for i in 1:size(data, 1)
+        s=data[i,1];
+        a=data[i,2];
+        r=data[i,3];
+        sp=data[i,4];
+        (maxValue,ind_max)=findmax(Q[sp,:]);
+        Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a])
+    end
+    return Q;
+end
+
+function findOptimalPolicyFromQ(Q,numStates)
+    optimalPolicy=ones(numStates,1);
+    for s=1:numStates
+        (maxValue,ind_max)=findmax(Q[s,:]);
+        optimalPolicy[s]=ind_max;
+    end
+    return optimalPolicy;
+end
+
 function findPolicyForSmall(data)
     numStates=100;
     numActions=4;
     uniformPolicy=ones(numStates,1);
-    return uniformPolicy;
+    # Maximum likelihood model-based reinforcement learning
+    # TR=computeTandR(numStates, numActions, data);
+    # discount=0.9;
+    # delta=0.0;
+    # maxIter=1000;
+    # optimalPolicy=doValueIteration(TR.T,TR.R,numStates,numActions, discount, delta, maxIter);
+    # return optimalPolicy;
+    # Q-learning
+    discount_Q=0.9;
+    alpha=1;
+    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha);
+    optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    return optimalPolicy;
 end
 
 function findPolicyForMedium(data)
@@ -65,7 +174,7 @@ end
 # Create the files for submission
 inputfilename = ["small.csv", "medium.csv", "large.csv"]
 outputfilename= ["small.policy", "medium.policy", "large.policy"]
-for i=1:3
+for i=1:1
     compute(inputfilename[i], outputfilename[i])
 end
 
