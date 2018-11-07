@@ -127,11 +127,12 @@ function doQLearning(numStates,numActions,data,discount,alpha,maxNumIter; Qinit=
             r=data[i,3];
             sp=data[i,4];
             (maxValue,ind_max)=findmax(Q[sp,:]);
-            Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a]);
+            q=copy(Q[s,a]);
+            Q[s,a] = q + alpha*(r + discount*maxValue - q);
             # Find the biggest change in Q values for this episode
-            update=max(update, alpha*(r + discount*maxValue - Q[s,a]));
+            update=max(update, alpha*(r + discount*maxValue - q));
         end
-        @show(Q[150413,1])
+        @show(update)
         numIter+=1;
     end
     @show(numIter)
@@ -185,103 +186,103 @@ function findPolicyForLarge(data)
     numStates=312020;
     numActions=9;
     uniformPolicy=ones(numStates,1);
-    # # Q-learning
-    # discount_Q=0.95; # given to us!
-    # uniqueStates=unique(data[:,1]);
-    # numUniqueStates=size(uniqueStates, 1);
-    # alpha=1/numUniqueStates;
-    # @show numUniqueStates
-    # Qinit=ones(numStates,numActions);
-    # for si=1:numStates
-    #     if (si==150413 || si==151203 || si==150211)
-    #         for ai=1:9
-    #             if (ai>=5)
-    #                 Qinit[si,ai]=-100;
-    #             else
-    #                 Qinit[si,ai]=100;
-    #             end
-    #         end
-    #     else
-    #         for ai=1:9
-    #             if (ai>=5)
-    #                 Qinit[si,ai]=100;
-    #             else
-    #                 Qinit[si,ai]=-100;
-    #             end
-    #         end
-    #     end
-    # end
-    # numIter=500;
-    # Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter,Qinit=Qinit);
-    # optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
-    # return optimalPolicy;
-
-    # Value iteration by approximating T and R
-    s=data[1];
-    a=data[2];
-    r=data[3];
-    sp=data[4];
-    numRows=size(data,1)
-    uniqueInitialStates=unique(s);
-    uniqueFinalStates=unique(sp);
-    # We've found that these are the same 500 states in both cases
-    numUniqueStates=size(uniqueInitialStates, 1);
-    s_new_numbering=zeros(Int64,numRows);
-    sp_new_numbering=zeros(Int64,numRows);
-    @show numRows
-    for i=1:numRows
-        sp_new_numbering[i] = findfirst(fs -> fs==sp[i], uniqueFinalStates);
-        s_new_numbering[i] = findfirst(is -> is==s[i], uniqueInitialStates);
-    end
-    @show sp_new_numbering[1:10]
-    T=zeros(numUniqueStates,numActions,numUniqueStates);
-    R=zeros(numUniqueStates,numActions);
-    # Can write R(s,a) which is mostly zeros except at a few states
-    G0Indices=findall(ri -> ri>0, r);
-    @show G0Indices[1:10]
-    G0Rewards=r[G0Indices];
-    G0Actions=a[G0Indices];
-    G0States=s_new_numbering[G0Indices];
-    # @show a[1:10]
-    # @show G0States
-    for k=1:length(G0Indices)
-        R[G0States[k],G0Actions[k]]=G0Rewards[k];
-    end
-    # T(sp|s,a) can be approximated
-    # for a=1-4, T(s|s,a)=1 and T(s'|s,a) where s' not equal to s is 0
-    for a=1:4
-        for s=1:numUniqueStates
-            T[s,a,s]=1;
-        end
-    end
-    # for a=5-9 T(s'|s,a) is evenly distributed
-    # Can improve on this because for some sk T(s'|sk,a) is only 1 if s'=sk
-    # But we would have to identify those sk
-    for a=5:9
-        for s=1:numUniqueStates
-            for sp=1:numUniqueStates
-                T[s,a,sp]=1/numUniqueStates;
+    # Q-learning
+    discount_Q=0.95; # given to us!
+    uniqueStates=unique(data[1]);
+    numUniqueStates=size(uniqueStates, 1);
+    alpha=1/numUniqueStates;
+    @show numUniqueStates
+    Qinit=ones(numStates,numActions);
+    for si=1:numStates
+        if (si==150413 || si==151203 || si==150211)
+            for ai=1:9
+                if (ai>=5)
+                    Qinit[si,ai]=-100;
+                else
+                    Qinit[si,ai]=100;
+                end
+            end
+        else
+            for ai=1:9
+                if (ai>=5)
+                    Qinit[si,ai]=100;
+                else
+                    Qinit[si,ai]=-100;
+                end
             end
         end
     end
-    # @show T
-    # With these R and T estimates, try value iteration
-    discount=0.95;
-    delta=0.1;
-    maxIter=1000;
-    optimalPolicyForUniqueStates=doValueIteration(T,R,numUniqueStates,numActions, discount, delta, maxIter);
-    # Need to convert to an optimal policy for all numStates
-    optimalPolicy=zeros(numStates,1);
-    for i=1:numStates
-        if (i in uniqueInitialStates)
-            idxInUniqueStates = findfirst(is -> is==i, uniqueInitialStates);
-            optimalPolicy[i]=optimalPolicyForUniqueStates[idxInUniqueStates];
-        else
-            # Pick an action that is not stationary, i.e. not 1-4
-            optimalPolicy[i]=5;
-        end
-    end
-    return optimalPolicy
+    numIter=10;
+    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter,Qinit=Qinit, threshold=0);
+    optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    return optimalPolicy;
+
+    # Value iteration by approximating T and R
+    # s=data[1];
+    # a=data[2];
+    # r=data[3];
+    # sp=data[4];
+    # numRows=size(data,1)
+    # uniqueInitialStates=unique(s);
+    # uniqueFinalStates=unique(sp);
+    # # We've found that these are the same 500 states in both cases
+    # numUniqueStates=size(uniqueInitialStates, 1);
+    # s_new_numbering=zeros(Int64,numRows);
+    # sp_new_numbering=zeros(Int64,numRows);
+    # @show numRows
+    # for i=1:numRows
+    #     sp_new_numbering[i] = findfirst(fs -> fs==sp[i], uniqueFinalStates);
+    #     s_new_numbering[i] = findfirst(is -> is==s[i], uniqueInitialStates);
+    # end
+    # @show sp_new_numbering[1:10]
+    # T=zeros(numUniqueStates,numActions,numUniqueStates);
+    # R=zeros(numUniqueStates,numActions);
+    # # Can write R(s,a) which is mostly zeros except at a few states
+    # G0Indices=findall(ri -> ri>0, r);
+    # @show G0Indices[1:10]
+    # G0Rewards=r[G0Indices];
+    # G0Actions=a[G0Indices];
+    # G0States=s_new_numbering[G0Indices];
+    # # @show a[1:10]
+    # # @show G0States
+    # for k=1:length(G0Indices)
+    #     R[G0States[k],G0Actions[k]]=G0Rewards[k];
+    # end
+    # # T(sp|s,a) can be approximated
+    # # for a=1-4, T(s|s,a)=1 and T(s'|s,a) where s' not equal to s is 0
+    # for a=1:4
+    #     for s=1:numUniqueStates
+    #         T[s,a,s]=1;
+    #     end
+    # end
+    # # for a=5-9 T(s'|s,a) is evenly distributed
+    # # Can improve on this because for some sk T(s'|sk,a) is only 1 if s'=sk
+    # # But we would have to identify those sk
+    # for a=5:9
+    #     for s=1:numUniqueStates
+    #         for sp=1:numUniqueStates
+    #             T[s,a,sp]=1/numUniqueStates;
+    #         end
+    #     end
+    # end
+    # # @show T
+    # # With these R and T estimates, try value iteration
+    # discount=0.95;
+    # delta=0.1;
+    # maxIter=1000;
+    # optimalPolicyForUniqueStates=doValueIteration(T,R,numUniqueStates,numActions, discount, delta, maxIter);
+    # # Need to convert to an optimal policy for all numStates
+    # optimalPolicy=zeros(numStates,1);
+    # for i=1:numStates
+    #     if (i in uniqueInitialStates)
+    #         idxInUniqueStates = findfirst(is -> is==i, uniqueInitialStates);
+    #         optimalPolicy[i]=optimalPolicyForUniqueStates[idxInUniqueStates];
+    #     else
+    #         # Pick an action that is not stationary, i.e. not 1-4
+    #         optimalPolicy[i]=5;
+    #     end
+    # end
+    # return optimalPolicy
 
 end
 
