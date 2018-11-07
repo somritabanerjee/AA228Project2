@@ -115,18 +115,27 @@ function doValueIteration(T,R,numStates,numActions, discount, delta, maxIter)
     return optimalPolicy;
 end
 
-function doQLearning(numStates,numActions,data,discount,alpha,numIter)
-    Q=zeros(numStates,numActions);
-    for k=1:numIter
+function doQLearning(numStates,numActions,data,discount,alpha,maxNumIter; Qinit=zeros(numStates,numActions), threshold=0.01)
+    Q=Qinit;
+    numIter=1;
+    update=threshold+1; # some non-zero initialization
+    while (numIter<=maxNumIter && update > threshold)
+        update=0;
         for i in 1:size(data, 1)
             s=data[i,1];
             a=data[i,2];
             r=data[i,3];
             sp=data[i,4];
             (maxValue,ind_max)=findmax(Q[sp,:]);
-            Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a])
+            Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a]);
+            # Find the biggest change in Q values for this episode
+            update=max(update, alpha*(r + discount*maxValue - Q[s,a]));
         end
+        @show(Q[150413,1])
+        numIter+=1;
     end
+    @show(numIter)
+    @show(update)
     return Q;
 end
 
@@ -177,10 +186,33 @@ function findPolicyForLarge(data)
     numActions=9;
     uniformPolicy=ones(numStates,1);
     # Q-learning
-    discount_Q=0.9;
-    alpha=1;
-    numIter=1;
-    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter);
+    discount_Q=0.95; # given to us!
+    uniqueStates=unique(data[:,1]);
+    numUniqueStates=size(uniqueStates, 1);
+    alpha=1/numUniqueStates;
+    @show numUniqueStates
+    Qinit=ones(numStates,numActions);
+    for si=1:numStates
+        if (si==150413 || si==151203 || si==150211)
+            for ai=1:9
+                if (ai>=5)
+                    Qinit[si,ai]=0;
+                else
+                    Qinit[si,ai]=10000000;
+                end
+            end
+        else
+            for ai=1:9
+                if (ai>=5)
+                    Qinit[si,ai]=100;
+                else
+                    Qinit[si,ai]=0;
+                end
+            end
+        end
+    end
+    numIter=10;
+    Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter,Qinit=Qinit);
     optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
     return optimalPolicy;
 end
