@@ -28,7 +28,7 @@ a=large_data(:,2);
 r=large_data(:,3);
 sp=large_data(:,4);
 figure
-plot(sp,large_data(:,3),'o')
+plot(sp,r,'o')
 title('Large')
 xlabel('Transitioned state');
 ylabel('Reward received');
@@ -38,8 +38,8 @@ unique_final_states=unique(sp);
 unique_initial_states=unique(s);
 % The same 500 unique initial states! 
 dictionary=[(1:500)',unique_initial_states];
-final_states_new_numbering=zeros(500,1);
-initial_states_new_numbering=zeros(500,1);
+final_states_new_numbering=zeros(length(large_data),1);
+initial_states_new_numbering=zeros(length(large_data),1);
 for i=1:length(large_data)
     final_states_new_numbering(i) = find(unique_final_states==sp(i));
     initial_states_new_numbering(i) = find(unique_initial_states==s(i));
@@ -77,9 +77,9 @@ text(150413+50,200,'sp=150413, r=200')
 text(151203-200,200-8,'sp=151203, r=200')
 
 ind_greater_than_0_reward=find(R>0);
-statesWithG0RewardON=unique(sp(ind_greater_than_0_reward));
+finalStatesWithG0RewardON=unique(sp(ind_greater_than_0_reward));
 % 11 states [150211;150413;151203;230402;231014;270203;271310;290213;291112;300311;301103]
-statesWithG0RewardNN=unique(final_states_new_numbering(ind_greater_than_0_reward));
+finalStatesWithG0RewardNN=unique(final_states_new_numbering(ind_greater_than_0_reward));
 % Only [16;38;63;132;149;213;275;318;357;426;453]
 rewardsG0= unique(R(ind_greater_than_0_reward));
 % Only 5, 10, 100, 200
@@ -92,6 +92,12 @@ ylim([0 230])
 text(16+10,100,'sp=16, r=100')
 text(38-20,200+10,'sp=38, r=200')
 text(63,200-10,'sp=63, r=200')
+figure
+plot(initial_states_new_numbering(ind_greater_than_0_reward),R(ind_greater_than_0_reward),'o')
+title('Large - only if reward > 0')
+xlabel('Initial state (new numbering)');
+ylabel('Reward received');
+ylim([0 230])
 
 % figure 
 % plot(s,a,sp)
