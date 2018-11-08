@@ -124,6 +124,103 @@ for actionIdx=1:9
     ylim([0 550]);
 end
 
+figure
+for actionIdx=1:9
+    indices=find(a==actionIdx);
+    subplot(3,3,actionIdx); 
+    plot(initial_states_new_numbering(indices),r(indices),'o');
+    title(['action = ',num2str(actionIdx)]);
+    ylabel('reward');
+    xlabel('s');
+    xlim([0 550]);
+%     ylim([0 550]);
+end
+
+%% Actions analysis
+for actionIdx=1:9
+    lower=90;
+    upper=110;
+    m=initial_states_new_numbering;
+    indices=find((not(abs(sign(sign(lower-m)+sign(upper-m))))+ (a==actionIdx))>1);
+    subplot(3,3,actionIdx); 
+    plot(initial_states_new_numbering(indices),final_states_new_numbering(indices),'o');
+    title(['action = ',num2str(actionIdx)]);
+    ylabel('s''');
+    xlabel('s');
+    xlim([lower-10 upper+10]);
+    ylim([lower-10 upper+10]);
+end
+
+figure
+for actionIdx=1:9
+    lower=50;
+    upper=200;
+    m=initial_states_new_numbering;
+    indices=find((not(abs(sign(sign(lower-m)+sign(upper-m))))+ (a==actionIdx))>1);
+    subplot(3,3,actionIdx); 
+    plot(initial_states_new_numbering(indices),final_states_new_numbering(indices),'o');
+    title(['action = ',num2str(actionIdx)]);
+    ylabel('s''');
+    xlabel('s');
+    xlim([lower-10 upper+10]);
+    ylim([lower-10 upper+10]);
+end
+
+%% others
+
+figure
+for actionIdx=1:9
+    m=initial_states_new_numbering;
+    indices=find((not(abs(sign(sign(90-m)+sign(110-m))))+ (a==actionIdx))>1);
+    subplot(3,3,actionIdx); 
+    plot(initial_states_new_numbering(indices),r(indices),'o');
+    title(['action = ',num2str(actionIdx)]);
+    ylabel('reward');
+    xlabel('s');
+%     xlim([0 550]);
+%     ylim([0 550]);
+end
+
+
+figure
+plot(initial_states_new_numbering(ind_greater_than_20_reward),final_states_new_numbering(ind_greater_than_20_reward),'o')
+hold on
+plot([1:100],[1:100],'--')
+title('Transitions leading to r>20')
+ylabel('s''');
+xlabel('s');
+
+figure
+plot(initial_states_new_numbering(ind_greater_than_20_reward),a(ind_greater_than_20_reward),'o')
+title('Actions leading to r>20')
+ylabel('a');
+xlabel('s');
+
+MatrixG20NN=[initial_states_new_numbering(ind_greater_than_20_reward) a(ind_greater_than_20_reward) r(ind_greater_than_20_reward) final_states_new_numbering(ind_greater_than_20_reward)];
+unique(MatrixG20NN,'rows')
+MatrixG20ON=[s(ind_greater_than_20_reward) a(ind_greater_than_20_reward) r(ind_greater_than_20_reward) sp(ind_greater_than_20_reward)];
+unique(MatrixG20ON,'rows')
+
+% ind=find(initial_states_new_numbering>=90 && initial_states_new_numbering<=110)
+m=initial_states_new_numbering;
+ind=find((not(abs(sign(sign(90-m)+sign(110-m))))+ (a==4))>1);
+MatrixCloseTo100NN=[initial_states_new_numbering(ind) a(ind) r(ind) final_states_new_numbering(ind)];
+figure
+plot(MatrixCloseTo100NN(:,1),MatrixCloseTo100NN(:,4),'o')
+hold on
+plot([90:110],[90:110],'--');
+plot([90:110],[100:120],'--');
+title('Behavior near 100 for a==4');
+
+ind=find((not(abs(sign(sign(90-m)+sign(110-m))))+ (a==3))>1);
+MatrixCloseTo100NN=[initial_states_new_numbering(ind) a(ind) r(ind) final_states_new_numbering(ind)];
+figure
+plot(MatrixCloseTo100NN(:,1),MatrixCloseTo100NN(:,4),'o')
+hold on
+plot([90:110],[90:110],'--'); %sp=s
+plot([90:110],[80:100],'--'); %sp=s-10
+title('Behavior near 100 for a==3');
+
 % Policy:
 % For the 312020 - 500 states, just set action to any one of 5-9 doesn't
 % matter. Let's just say we set all of them to 9. 
