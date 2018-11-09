@@ -17,12 +17,43 @@ title('Small')
 xlabel('Transitioned state');
 ylabel('Reward received');
 
+%% Medium
 figure
 plot(medium_data(:,4),medium_data(:,3),'o')
 title('Medium')
 xlabel('Transitioned state');
 ylabel('Reward received');
+figure
+plot(medium_data(:,1),medium_data(:,4),'o')
+title('Medium')
+ylabel('Transitioned state');
+xlabel('Initial state');
+figure
+plot(medium_data(:,1),medium_data(:,4),'o')
+title('Medium')
+ylabel('Transitioned state');
+xlabel('Initial state');
+ylim([2*10^4 3*10^4])
 
+figure
+ind=find(medium_data(:,3)>0)
+plot(medium_data(ind,4),medium_data(ind,3),'o')
+title('Medium')
+xlabel('Transitioned state');
+ylabel('Reward received');
+
+figure
+ind=find(medium_data(:,3)>0)
+plot(medium_data(ind,1),medium_data(ind,4),'o')
+title('Medium')
+xlabel('Initial state');
+ylabel('Transitioned state');
+
+unique_final_states_medium=unique(medium_data(:,4));
+% Only 500 unique final states!
+unique_initial_states_medium=unique(medium_data(:,1));
+
+%% Large
 s=large_data(:,1);
 a=large_data(:,2);
 r=large_data(:,3);

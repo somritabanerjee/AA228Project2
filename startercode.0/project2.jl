@@ -4,6 +4,7 @@ using DataFrames
 using CSV
 # using GraphPlot
 using SpecialFunctions
+using HDF5, JLD
 # using BayesNets # only for testing my scoring function against bayesian_score
 
 function write_policy(policy, filename)
@@ -23,20 +24,12 @@ function compute(infile::String, outfile::String)
     else
         data=CSV.File(infile) |> DataFrame;
     end
-    # distinctStates=by(data,:s,nrow);
-    # numStates=maximum(data.s,data.sp);
-    # numStatesMentionedInData=size(distinctStates,1);
-    # policy=Dict{Int, Int}();
-    # for i=1:numStates
-    #     policy[distinctStates[i,1]]=0;
-    # end
     if (infile=="small.csv")
         policy=findPolicyForSmall(data);
     elseif (infile=="medium.csv")
         policy=findPolicyForMedium(data);
     elseif (infile=="large.csv")
-        policy=findPolicyForLargeOld(data);
-        # policy=findPolicyForLarge(data);
+        policy=findPolicyForLarge(data);
     end
     write_policy(policy,outfile);
 end
@@ -154,43 +147,6 @@ function doQLearningOnUniqueStates(numStates,numActions,svals,avals,rvals,spvals
         end
     end
     return Q;
-    # Q=Qinit;
-    # numIter=1;
-    # update=threshold+1; # some non-zero initialization
-    # while (numIter<=maxNumIter && update > threshold)
-    #     update=0;
-    #     for i in 1:size(svals, 1)
-    #         s=svals[i];
-    #         a=avals[i];
-    #         r=rvals[i];
-    #         sp=spvals[i];
-    #         (maxValue,ind_max)=findmax(Q[sp,:]);
-    #         q=copy(Q[s,a]);
-    #         Q[s,a] = q + alpha*(r + discount*maxValue - q);
-    #         # Find the biggest change in Q values for this episode
-    #         update=max(update, alpha*(r + discount*maxValue - q));
-    #     end
-    #     @show(update)
-    #     numIter+=1;
-    # end
-    # @show(numIter)
-    # @show(update)
-    # return Q;
-end
-
-function doQLearningOld(numStates,numActions,data,discount,alpha,numIter; Qinit=zeros(numStates,numActions))
-    Q=Qinit;
-    for k=1:numIter
-        for i in 1:size(data, 1)
-            s=data[i,1];
-            a=data[i,2];
-            r=data[i,3];
-            sp=data[i,4];
-            (maxValue,ind_max)=findmax(Q[sp,:]);
-            Q[s,a] = Q[s,a] + alpha*(r + discount*maxValue - Q[s,a])
-        end
-    end
-    return Q;
 end
 
 function findOptimalPolicyFromQ(Q,numStates)
@@ -229,10 +185,113 @@ function findPolicyForMedium(data)
     # Q-learning
     discount_Q=0.9;
     alpha=1;
-    numIter=1;
+    numIter=20;
     Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter);
     optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
+    write_policy(optimalPolicy,"mediumNaiveQ20Iter.policy")
+
+    # Let's try Q learning only on the states that are uniquely known
+    # For the others let's find the nearest position with the same velocity and
+    # assign the same Q value
+
+    # Manipulating data
+    println("Manipulating data");
+    s=data[1];
+    a=data[2];
+    r=data[3];
+    sp=data[4];
+    numRows=size(data,1)
+
+    # Computed and stored in file. Reading from file.
+    uniqueStates=load("medium_uniqueStates.jld")["uniqueStates"]
+    s_new_numbering=load("medium_s_new_numbering.jld")["s_new_numbering"]
+    sp_new_numbering=load("medium_sp_new_numbering.jld")["sp_new_numbering"]
+    # uniqueInitialStates=unique(s);
+    # uniqueFinalStates=unique(sp);
+    # uniqueStates=sort(union(uniqueInitialStates,uniqueFinalStates));
+    # numUniqueStates=size(uniqueStates, 1);
+    # s_new_numbering=zeros(Int64,numRows);
+    # sp_new_numbering=zeros(Int64,numRows);
+    # for i=1:numRows
+    #     sp_new_numbering[i] = findfirst(fs -> fs==sp[i], uniqueStates);
+    #     s_new_numbering[i] = findfirst(is -> is==s[i], uniqueStates);
+    # end
+
+    discount_Q=0.9;
+    alpha=1;
+    numIter=10;
+    println("Starting Q Learning on unique states");
+    Qvalues=doQLearningOnUniqueStates(numUniqueStates,numActions,s_new_numbering,a,r,sp_new_numbering,discount_Q,alpha,numIter);
+    println("Completed Q Learning on unique states")
+    QFull=zeros(numStates,numActions);
+    QvaluesNonZeroIdx=findall(q -> q!=0, Qvalues);
+    println("Finding Q for all states")
+    for si=1:numStates
+        for ai=1:numActions
+            if si in uniqueStates
+                idxInUniqueStates = findfirst(i -> i==si, uniqueStates);
+                QFull[si,ai]=Qvalues[idxInUniqueStates,ai];
+            else
+                # Find nearest state with same action
+                QvaluesWithSameAction=Qvalues[:,ai];
+                # idx over uniqueStates
+                QvaluesNonZeroIdx=findall(q -> q!=0, QvaluesWithSameAction);
+                QvaluesNonZero=QvaluesWithSameAction[QvaluesNonZeroIdx];
+                statesNonZero=uniqueStates[QvaluesNonZeroIdx];
+                QValueOfStateClosest=findNearestQvalue(si,statesNonZero,QvaluesNonZero);
+                QFull[si,ai]=QValueOfStateClosest;
+            end
+        end
+        if (si>numStates/2)
+            println("halfway done!");
+        end
+    end
+    println("Found Q for all states")
+    println("Computing optimal policy")
+    optimalPolicy=findOptimalPolicyFromQ(QFull,numStates);
+    write_policy(optimalPolicy, "mediumQUnique10AndClosest.policy")
     return optimalPolicy;
+end
+
+function findNearestQvalue(si,statesNonZero,QvaluesNonZero)
+    # println("Finding nearest Q value for ")
+    # @show si
+    # The position bins can take on a value between 0 and 499
+    # and the velocity bins can take on a value between 0 and 99.
+    # 1+pos+500*vel gives the integer corresponding to a state with position pos and velocity vel
+    posForThisState=mod(si,500)-1;
+    velForThisState=floor(si/500);
+    statesWithSameVel=collect(1+500*velForThisState:1+499+500*velForThisState);
+    sameVelStatesNonZero=filter(m->in(m,statesWithSameVel),statesNonZero);
+    statesWithSamePos=collect((1+posForThisState):500:(1+posForThisState+99*500));
+    samePosStatesNonZero=filter(m->in(m,statesWithSamePos),statesNonZero);
+    stateClosest=0;
+    if (!isempty(sameVelStatesNonZero) && !isempty(samePosStatesNonZero))
+        # find the state with same vel and closest position
+        idx=findmin(abs.(sameVelStatesNonZero.-si))[2];
+        stateClosestPos=sameVelStatesNonZero[idx];
+        idx=findmin(abs.(samePosStatesNonZero.-si))[2];
+        stateClosestVel=samePosStatesNonZero[idx];
+        statesClosest=[stateClosestPos stateClosestVel];
+        idx=findmin(abs.(statesClosest.-si))[2];
+        stateClosest=statesClosest[idx];
+    elseif  (!isempty(sameVelStatesNonZero))
+        idx=findmin(abs.(sameVelStatesNonZero.-si))[2];
+        stateClosestPos=sameVelStatesNonZero[idx];
+        stateClosest=stateClosestPos;
+    elseif (!isempty(samePosStatesNonZero))
+        idx=findmin(abs.(samePosStatesNonZero.-si))[2];
+        stateClosestVel=samePosStatesNonZero[idx];
+        stateClosest=stateClosestVel;
+    end
+    # @show stateClosest
+    # If no closest state found, return 0
+    if (stateClosest==0)
+        return 0;
+    end
+    idxOfStateClosest=findfirst(si -> si==stateClosest,statesNonZero);
+    QValueOfStateClosest=QvaluesNonZero[idxOfStateClosest];
+    return QValueOfStateClosest;
 end
 
 function constructFullOptimalPolicyFromSubset(optimalPolicyForUniqueStates, numStates, uniqueInitialStates)
@@ -251,126 +310,6 @@ function constructFullOptimalPolicyFromSubset(optimalPolicyForUniqueStates, numS
 end
 
 function findPolicyForLarge(data)
-    numStates=312020;
-    numActions=9;
-    uniformPolicy=ones(numStates,1);
-
-    # Manipulating data
-    s=data[1];
-    a=data[2];
-    r=data[3];
-    sp=data[4];
-    numRows=size(data,1)
-    uniqueInitialStates=unique(s);
-    uniqueFinalStates=unique(sp);
-    # We've found that these are the same 500 states in both cases
-    numUniqueStates=size(uniqueInitialStates, 1);
-    s_new_numbering=zeros(Int64,numRows);
-    sp_new_numbering=zeros(Int64,numRows);
-    for i=1:numRows
-        sp_new_numbering[i] = findfirst(fs -> fs==sp[i], uniqueFinalStates);
-        s_new_numbering[i] = findfirst(is -> is==s[i], uniqueInitialStates);
-    end
-
-    # Q-learning
-    discount_Q=0.95; # given to us!
-    alpha=1/numUniqueStates;
-    @show numUniqueStates
-    Qinit=ones(numUniqueStates,numActions);
-    for si=1:numUniqueStates
-        realStateIndex=uniqueInitialStates[si];
-        if (realStateIndex==150413 || realStateIndex==151203 || realStateIndex==150211)
-            if (realStateIndex == 150211)
-                break;
-            end
-            for ai=1:9
-                if (ai==1)
-                    Qinit[si,ai]=10000000;
-                else
-                    Qinit[si,ai]=0;
-                end
-            end
-        else
-            for ai=1:9
-                if (ai>=5)
-                    Qinit[si,ai]=100;
-                else
-                    Qinit[si,ai]=0;
-                end
-            end
-        end
-    end
-    numIterValues=[1 5 20 50 10 300];
-    optimalPolicy=zeros(Int64,numStates);
-    @show Qinit
-    for x=1:length(numIterValues)
-        numIter=numIterValues[x];
-        Qvalues=doQLearningOnUniqueStates(numUniqueStates,numActions,s_new_numbering,a,r,sp_new_numbering,discount_Q,alpha,numIter,Qinit=Qinit, threshold=0);
-        optimalPolicyForUniqueStates=findOptimalPolicyFromQ(Qvalues,numUniqueStates);
-        write_policy(optimalPolicyForUniqueStates,"largeQOnlyUniqueStates"*string(numIter)*"Iter.policy");
-        # convert to full optimal policy
-        optimalPolicy=constructFullOptimalPolicyFromSubset(optimalPolicyForUniqueStates, numStates, uniqueInitialStates)
-        write_policy(optimalPolicy,"largeQ"*string(numIter)*"Iter.policy");
-    end
-    return optimalPolicy;
-
-    # Value iteration by approximating T and R
-
-    # @show numRows
-
-    # @show sp_new_numbering[1:10]
-    # T=zeros(numUniqueStates,numActions,numUniqueStates);
-    # R=zeros(numUniqueStates,numActions);
-    # # Can write R(s,a) which is mostly zeros except at a few states
-    # G0Indices=findall(ri -> ri>0, r);
-    # @show G0Indices[1:10]
-    # G0Rewards=r[G0Indices];
-    # G0Actions=a[G0Indices];
-    # G0States=s_new_numbering[G0Indices];
-    # # @show a[1:10]
-    # # @show G0States
-    # for k=1:length(G0Indices)
-    #     R[G0States[k],G0Actions[k]]=G0Rewards[k];
-    # end
-    # # T(sp|s,a) can be approximated
-    # # for a=1-4, T(s|s,a)=1 and T(s'|s,a) where s' not equal to s is 0
-    # for a=1:4
-    #     for s=1:numUniqueStates
-    #         T[s,a,s]=1;
-    #     end
-    # end
-    # # for a=5-9 T(s'|s,a) is evenly distributed
-    # # Can improve on this because for some sk T(s'|sk,a) is only 1 if s'=sk
-    # # But we would have to identify those sk
-    # for a=5:9
-    #     for s=1:numUniqueStates
-    #         for sp=1:numUniqueStates
-    #             T[s,a,sp]=1/numUniqueStates;
-    #         end
-    #     end
-    # end
-    # # @show T
-    # # With these R and T estimates, try value iteration
-    # discount=0.95;
-    # delta=0.1;
-    # maxIter=1000;
-    # optimalPolicyForUniqueStates=doValueIteration(T,R,numUniqueStates,numActions, discount, delta, maxIter);
-    # # Need to convert to an optimal policy for all numStates
-    # optimalPolicy=zeros(numStates,1);
-    # for i=1:numStates
-    #     if (i in uniqueInitialStates)
-    #         idxInUniqueStates = findfirst(is -> is==i, uniqueInitialStates);
-    #         optimalPolicy[i]=optimalPolicyForUniqueStates[idxInUniqueStates];
-    #     else
-    #         # Pick an action that is not stationary, i.e. not 1-4
-    #         optimalPolicy[i]=5;
-    #     end
-    # end
-    # return optimalPolicy
-
-end
-
-function findPolicyForLargeOld(data)
     numStates=312020;
     numActions=9;
     uniformPolicy=ones(numStates,1);
@@ -399,17 +338,18 @@ function findPolicyForLargeOld(data)
             end
         end
     end
-    numIter=40;
+    # For some reason, 30 gives us the best policy at convergence
+    numIter=30;
     Qvalues=doQLearning(numStates,numActions,data,discount_Q,alpha,numIter,Qinit=Qinit);
     optimalPolicy=findOptimalPolicyFromQ(Qvalues,numStates);
-    write_policy(optimalPolicy,"largeQ40IterUsingOldCode.policy")
+    write_policy(optimalPolicy,"largeQ30IterUsingOldCode.policy")
     return optimalPolicy;
 end
 
 # Create the files for submission
 inputfilename = ["small.csv", "medium.csv", "large.csv"]
 outputfilename= ["small.policy", "medium.policy", "large.policy"]
-for i=3:3
+for i=2:2
     compute(inputfilename[i], outputfilename[i])
 end
 

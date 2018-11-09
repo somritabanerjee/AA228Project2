@@ -1,0 +1,26 @@
+using HDF5, JLD
+data=CSV.File("medium.csv") |> DataFrame;
+s=data[1];
+    a=data[2];
+    r=data[3];
+    sp=data[4];
+	
+	numRows=size(data,1)
+    uniqueInitialStates=unique(s);
+    uniqueFinalStates=unique(sp);
+    uniqueStates=sort(union(uniqueInitialStates,uniqueFinalStates));
+    numUniqueStates=size(uniqueStates, 1);
+    s_new_numbering=zeros(Int64,numRows);
+    sp_new_numbering=zeros(Int64,numRows);
+    for i=1:numRows
+        sp_new_numbering[i] = findfirst(fs -> fs==sp[i], uniqueStates);
+        s_new_numbering[i] = findfirst(is -> is==s[i], uniqueStates);
+    end
+	
+	save("medium_uniqueStates.jld", "uniqueStates", uniqueStates)
+		save("medium_sp_new_numbering.jld", "sp_new_numbering", sp_new_numbering)
+	save("medium_s_new_numbering.jld", "s_new_numbering", s_new_numbering)
+
+load("medium_uniqueStates.jld")["uniqueStates"]
+load("medium_s_new_numbering.jld")["s_new_numbering"]
+load("medium_sp_new_numbering.jld")["sp_new_numbering"]
